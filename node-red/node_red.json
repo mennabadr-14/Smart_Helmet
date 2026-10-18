@@ -1,0 +1,313 @@
+[
+    {
+        "id": "4a7dbdfdd986f27f",
+        "type": "tab",
+        "label": "Smart Helmet",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "67ac9bc0b2a2c5ea",
+        "type": "mqtt in",
+        "z": "4a7dbdfdd986f27f",
+        "name": "helmet/telemetry",
+        "topic": "so-m8k2/helmet/telemetry",
+        "qos": "1",
+        "datatype": "json",
+        "broker": "hlm_broker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 160,
+        "y": 100,
+        "wires": [
+            [
+                "46337c0aa27f7b0e"
+            ]
+        ]
+    },
+    {
+        "id": "46337c0aa27f7b0e",
+        "type": "function",
+        "z": "4a7dbdfdd986f27f",
+        "name": "Telemetry -> dashboard + map",
+        "func": "const t = msg.payload;\nif (!t || typeof t !== 'object') return null;\nif (t.gas === undefined && t.oxygen !== undefined) { t.gas = Math.max(0, Math.round((98 - t.oxygen) / 40 * 100)); delete t.oxygen; }   // old senders\n// use the OwnTracks location when it is fresh (< 5 min), otherwise the helmet GPS\nconst ot = flow.get('ot');\nlet src = 'helmet';\nif (ot && (Date.now() - ot.ts) < 300000) { t.lat = ot.lat; t.lon = ot.lon; src = 'owntracks'; }\nflow.set('status', t.status || 'SAFE');\nconst ui = { payload: Object.assign({ kind: 'telemetry', src: src }, t) };\nlet map = null;\nif (typeof t.lat === 'number' && typeof t.lon === 'number') {\n  const colors = { 'SAFE': '#9aa4b2', 'NOISE': '#f5a524', 'FIRE': '#ff4d4f', 'FALL': '#ff4d4f', 'GAS': '#ff4d4f', 'NOT WORN': '#5b6470' };\n  map = { payload: { name: 'Worker-01', lat: t.lat, lon: t.lon, icon: 'fa-user',\n                     iconColor: colors[t.status] || '#9aa4b2',\n                     popup: 'Status: ' + (t.status || '-') + (t.temp !== undefined ? '<br>Temp: ' + t.temp + ' C' : '') } };\n}\nreturn [ui, map];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 100,
+        "wires": [
+            [
+                "4084c55569f1d57d"
+            ],
+            [
+                "86a1f332d49a74d7"
+            ]
+        ]
+    },
+    {
+        "id": "dfdac408224e253f",
+        "type": "mqtt in",
+        "z": "4a7dbdfdd986f27f",
+        "name": "helmet/alerts",
+        "topic": "so-m8k2/helmet/alerts",
+        "qos": "1",
+        "datatype": "json",
+        "broker": "hlm_broker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 160,
+        "y": 200,
+        "wires": [
+            [
+                "cccd115754601d2f"
+            ]
+        ]
+    },
+    {
+        "id": "cccd115754601d2f",
+        "type": "function",
+        "z": "4a7dbdfdd986f27f",
+        "name": "Alert -> dashboard + email",
+        "func": "const a = msg.payload;\nif (!a || typeof a !== 'object') return null;\nif (a.gas === undefined && a.oxygen !== undefined) { a.gas = Math.max(0, Math.round((98 - a.oxygen) / 40 * 100)); delete a.oxygen; }   // old senders\nconst ot = flow.get('ot');\nif (ot && (Date.now() - ot.ts) < 300000) { a.lat = ot.lat; a.lon = ot.lon; }\nconst ui = { payload: Object.assign({ kind: 'alert' }, a) };\nif (a.type === 'info' || a.type === 'noise') return [ui, null];   // shown on the dashboard only, no email\nconst link = (typeof a.lat === 'number') ? 'https://www.google.com/maps?q=' + a.lat + ',' + a.lon : 'not available yet (connect OwnTracks)';\nlet det = '';\nif (a.temp !== undefined) det += 'Temperature: ' + a.temp + ' C\\n';\nif (a.gas !== undefined) det += 'Gas level: ' + a.gas + ' %\\n';\nif (a.accel !== undefined) det += 'Acceleration: ' + a.accel + ' g\\n';\nconst mail = { topic: a.message, payload: a.message + '\\n\\n' + det + 'Location: ' + link + '\\nTime: ' + new Date().toLocaleString() };\nreturn [ui, mail];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 200,
+        "wires": [
+            [
+                "4084c55569f1d57d"
+            ],
+            [
+                "c22f1df2516b774d"
+            ]
+        ]
+    },
+    {
+        "id": "c22f1df2516b774d",
+        "type": "e-mail",
+        "z": "4a7dbdfdd986f27f",
+        "server": "smtp.gmail.com",
+        "port": "465",
+        "authtype": "BASIC",
+        "saslformat": false,
+        "token": "oauth2Response.access_token",
+        "secure": true,
+        "tls": true,
+        "name": "mh9360786@gmail.com",
+        "dname": "Send to management",
+        "x": 760,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "c1fdc45735998660",
+        "type": "mqtt in",
+        "z": "4a7dbdfdd986f27f",
+        "name": "OwnTracks",
+        "topic": "owntracks/+/+",
+        "qos": "1",
+        "datatype": "json",
+        "broker": "hlm_broker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 300,
+        "wires": [
+            [
+                "6bdaac425b4363ab"
+            ]
+        ]
+    },
+    {
+        "id": "6bdaac425b4363ab",
+        "type": "function",
+        "z": "4a7dbdfdd986f27f",
+        "name": "OwnTracks location",
+        "func": "const p = msg.payload;\n// OwnTracks publishes many message types, keep only location updates\nif (!p || p._type !== 'location' || typeof p.lat !== 'number' || typeof p.lon !== 'number') return null;\nflow.set('ot', { lat: p.lat, lon: p.lon, ts: Date.now() });\nconst ui = { payload: { kind: 'location', src: 'OwnTracks', lat: p.lat, lon: p.lon, acc: p.acc, batt: p.batt } };\nconst map = { payload: { name: 'Worker-01', lat: p.lat, lon: p.lon, icon: 'fa-user', iconColor: '#9aa4b2', popup: 'OwnTracks location' } };\nreturn [ui, map];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 300,
+        "wires": [
+            [
+                "4084c55569f1d57d"
+            ],
+            [
+                "86a1f332d49a74d7"
+            ]
+        ]
+    },
+    {
+        "id": "4084c55569f1d57d",
+        "type": "ui_template",
+        "z": "4a7dbdfdd986f27f",
+        "group": "hlm_grp",
+        "name": "Safety console",
+        "order": 1,
+        "width": "12",
+        "height": "0",
+        "format": "<style>\n#sh-root{--bg:#060708;--panel:#0f1114;--panel2:#14171b;--line:#22262c;--text:#e6e9ee;--muted:#8a8f98;--ok:#d5dae2;--warn:#f5a524;--bad:#ff4d4f;\n  position:fixed;inset:0;z-index:99999;overflow:hidden;color:var(--text);\n  background:radial-gradient(1100px 560px at 15% -10%,#17191d 0%,#060708 62%) no-repeat,#060708;\n  font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:.2px;\n  display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:clamp(8px,1.3vh,14px);\n  padding:clamp(10px,1.8vh,20px) clamp(12px,1.6vw,26px)}\n#sh-root *{box-sizing:border-box}\n#sh-root>*{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}\n@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}\n.sh-top{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center}\n.brand{display:flex;align-items:center;gap:12px}\n.brand svg{width:clamp(28px,4vh,40px);height:clamp(28px,4vh,40px)}\n.brand b{display:block;font-size:clamp(14px,2vh,18px);letter-spacing:3.5px;font-weight:700}\n.brand span{display:block;font-size:clamp(9px,1.2vh,11px);color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:2px}\n.top-right{display:flex;align-items:center;gap:18px}\n.clock{font-size:clamp(11px,1.5vh,13px);color:var(--muted);font-variant-numeric:tabular-nums}\n.live{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:2px;padding:6px 12px;border:1px solid var(--line);border-radius:20px;background:var(--panel)}\n.live i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(213,218,226,.6);animation:ping 1.8s infinite}\n.live.off i{background:#4b4f56;animation:none}\n@keyframes ping{70%{box-shadow:0 0 0 9px rgba(213,218,226,0)}100%{box-shadow:0 0 0 0 rgba(213,218,226,0)}}\n.left,.right{display:grid;gap:clamp(8px,1.3vh,14px);min-height:0;min-width:0}\n.left{grid-template-rows:auto minmax(0,1.25fr) minmax(0,1fr)}\n.right{grid-template-rows:minmax(0,1.6fr) minmax(0,1fr)}\n.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:clamp(10px,1.8vh,18px);min-height:0;min-width:0;display:flex;flex-direction:column;transition:border-color .3s}\n.card:hover{border-color:#31363d}\n.hero{display:flex;align-items:center;gap:clamp(12px,1.6vw,22px);padding:clamp(10px,1.8vh,18px) clamp(14px,1.6vw,24px);background:linear-gradient(135deg,var(--panel2),var(--panel));border:1px solid var(--line);border-left:4px solid #4b4f56;border-radius:14px;transition:border-color .4s,box-shadow .4s}\n.hero small{font-size:clamp(9px,1.2vh,11px);letter-spacing:2px;color:var(--muted)}\n.hero h1{margin:4px 0 2px;font-size:clamp(20px,3.4vh,30px);font-weight:700;letter-spacing:.5px}\n.hero p{margin:0;color:var(--muted);font-size:clamp(11px,1.5vh,13px)}\n.hero-icon{width:clamp(40px,6vh,56px);height:clamp(40px,6vh,56px);padding:clamp(9px,1.4vh,14px);border-radius:14px;background:#0a0b0d;border:1px solid var(--line);flex:none;color:#8a8f98}\n.hero-text{flex:1;min-width:0}\n.hero-worn{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:8px 14px;border:1px solid var(--line);border-radius:20px;background:#0a0b0d;white-space:nowrap}\n.hero-worn .dot{width:8px;height:8px;border-radius:50%;background:#4b4f56;transition:background .3s}\n.hero-worn.on{color:var(--text)}.hero-worn.on .dot{background:var(--ok)}\n.ico{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}\n.hero.st-ok{border-left-color:var(--ok)}.hero.st-ok .hero-icon{color:var(--ok)}\n.hero.st-warn{border-left-color:var(--warn);box-shadow:0 0 0 1px rgba(245,165,36,.25),0 0 28px rgba(245,165,36,.1)}.hero.st-warn .hero-icon{color:var(--warn)}\n.hero.st-bad{border-left-color:var(--bad);animation:alarm 1.2s ease-in-out infinite}.hero.st-bad .hero-icon{color:var(--bad);animation:shake .6s ease-in-out infinite}\n@keyframes alarm{0%,100%{box-shadow:0 0 0 1px rgba(255,77,79,.35),0 0 12px rgba(255,77,79,.15)}50%{box-shadow:0 0 0 1px rgba(255,77,79,.85),0 0 34px rgba(255,77,79,.35)}}\n@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}\n.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(8px,1.3vh,14px);min-height:0}\n.kpi-head{display:flex;justify-content:space-between;align-items:center;font-size:clamp(9px,1.3vh,12px);color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}\n.chip{font-style:normal;font-size:clamp(8px,1.1vh,10px);font-weight:700;letter-spacing:1.5px;padding:3px 8px;border-radius:10px;background:#1a1d22;color:var(--ok);border:1px solid var(--line)}\n.ring-wrap{position:relative;flex:1;min-height:0;margin:clamp(4px,1vh,10px) 0}\n.ring{position:absolute;top:0;bottom:0;left:0;right:0;margin:auto;height:100%;max-width:100%;aspect-ratio:1/1}\n.ring-bg{fill:none;stroke:#1d2025;stroke-width:8}\n.ring-fg{fill:none;stroke:var(--ok);stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset .9s cubic-bezier(.3,.8,.3,1),stroke .4s}\n.ring-val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}\n.ring-val b{font-size:clamp(20px,3.8vh,36px);font-weight:600;font-variant-numeric:tabular-nums}\n.ring-val span{font-size:clamp(10px,1.4vh,13px);color:var(--muted)}\n.kpi-foot{text-align:center;font-size:clamp(9px,1.25vh,11px);color:var(--muted)}\n.lvl-warn .ring-fg{stroke:var(--warn)}.lvl-warn .chip{color:var(--warn);border-color:rgba(245,165,36,.4)}\n.lvl-bad{border-color:rgba(255,77,79,.5)}\n.lvl-bad .ring-fg{stroke:var(--bad);filter:drop-shadow(0 0 6px rgba(255,77,79,.7))}\n.lvl-bad .chip{color:var(--bad);border-color:rgba(255,77,79,.5);animation:blink 1s infinite}\n.lvl-idle .ring-fg{stroke:#33373d}.lvl-idle .ring-val b{color:#4b4f56}.lvl-idle .chip{color:var(--muted)}\n@keyframes blink{50%{opacity:.4}}\n.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:clamp(6px,1.2vh,12px);gap:10px}\n.card-head h2{margin:0;font-size:clamp(10px,1.4vh,13px);letter-spacing:2px;text-transform:uppercase;font-weight:600}\n.card-head a,.count{font-size:11px;color:var(--muted);text-decoration:none;letter-spacing:1px}\n.count{background:#1a1d22;border:1px solid var(--line);border-radius:10px;padding:2px 9px}\n.legend{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}\n.lg{width:14px;height:3px;border-radius:2px;display:inline-block;margin-left:8px}\n.lg.t{background:#e6e9ee}.lg.n{background:#686d76}\n.spark{flex:1;min-height:0;width:100%;display:block}\n.spark .grid{stroke:#1c1f24;stroke-width:1}\n.spark .limit{stroke:var(--bad);stroke-width:1;stroke-dasharray:5 5;opacity:.55}\n.spark polyline{fill:none;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}\n.line-t{stroke:#e6e9ee}.line-n{stroke:#686d76}\n.alerts{flex:1;min-height:0;overflow:hidden}\n.empty{color:var(--muted);font-size:13px;padding:2vh 0;text-align:center}\n.alert-row{display:flex;align-items:center;gap:12px;padding:clamp(6px,1.1vh,10px) 12px;margin-bottom:clamp(5px,.9vh,8px);background:#0b0c0e;border:1px solid var(--line);border-left:3px solid #4b4f56;border-radius:10px;animation:slide .4s ease both}\n@keyframes slide{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}\n.al-ic{width:20px;height:20px;flex:none;color:var(--muted)}\n.al-main{flex:1;min-width:0}.al-main b{display:block;font-size:clamp(11px,1.5vh,13px)}.al-main span{display:block;font-size:clamp(9px,1.25vh,11px);color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n.alert-row time{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}\n.al-fire,.al-fall,.al-gas{border-left-color:var(--bad)}.al-fire .al-ic,.al-fall .al-ic,.al-gas .al-ic{color:var(--bad)}\n.al-noise{border-left-color:var(--warn)}.al-noise .al-ic{color:var(--warn)}\n.al-info{border-left-color:var(--ok)}.al-info .al-ic{color:var(--ok)}\n.loc-line{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:clamp(10px,1.4vh,12px);color:var(--muted);margin-bottom:clamp(6px,1.1vh,10px)}\n.loc-line b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}\n.loc-line a{color:var(--text);text-decoration:none;border-bottom:1px solid #42474e}\n.map iframe{flex:1;min-height:0;width:100%;border:1px solid var(--line);border-radius:10px;background:#0a0b0d;filter:invert(.92) hue-rotate(180deg) grayscale(.6) contrast(.9)}\n@media(max-width:900px){#sh-root{overflow:auto;display:block}#sh-root>*{margin-bottom:12px}.left,.right{display:block}.left>*,.right>*{margin-bottom:12px}.grid4{grid-template-columns:repeat(2,1fr)}.ring-wrap{height:130px;flex:none}.map iframe{height:300px}}\n</style>\n\n<div id=\"sh-root\">\n  <header class=\"sh-top\">\n    <div class=\"brand\">\n      <svg viewBox=\"0 0 48 48\" aria-hidden=\"true\">\n        <path d=\"M7 31a17 17 0 0 1 34 0\" fill=\"none\" stroke=\"#e6e9ee\" stroke-width=\"2.4\" stroke-linecap=\"round\"/>\n        <path d=\"M24 12v11M17 15v8M31 15v8\" stroke=\"#e6e9ee\" stroke-width=\"2.4\" stroke-linecap=\"round\"/>\n        <path d=\"M4 33h40v3a2.5 2.5 0 0 1-2.5 2.5h-35A2.5 2.5 0 0 1 4 36z\" fill=\"#e6e9ee\"/>\n      </svg>\n      <div><b>SMART HELMET</b><span>Oil Site Safety Console</span></div>\n    </div>\n    <div class=\"top-right\">\n      <span class=\"live\" ng-class=\"{off: !online}\"><i></i>{{online ? 'LIVE' : 'OFFLINE'}}</span>\n      <span class=\"clock\">{{clock}}</span>\n    </div>\n  </header>\n\n  <div class=\"left\">\n    <section class=\"hero\" ng-class=\"'st-' + stClass()\">\n      <div class=\"hero-icon\" ng-switch=\"d.status\">\n        <svg ng-switch-when=\"SAFE\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M4 12.5l5 5L20 6.5\"/></svg>\n        <svg ng-switch-when=\"FIRE\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M12 3c.8 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2 0 2 1 3 2 3 0-3-1-5 1-8.8z\"/></svg>\n        <svg ng-switch-when=\"FALL\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M12 3l10 18H2z\"/><path d=\"M12 10v5M12 18v.4\"/></svg>\n        <svg ng-switch-when=\"GAS\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M7 18a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6-1A4.5 4.5 0 0 1 17 18z\"/></svg>\n        <svg ng-switch-when=\"NOISE\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M4 9v6h4l5 4V5L8 9z\"/><path d=\"M16.5 9a4 4 0 0 1 0 6M19.5 6a8 8 0 0 1 0 12\"/></svg>\n        <svg ng-switch-default class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M12 3v8M6.5 6.5a8 8 0 1 0 11 0\"/></svg>\n      </div>\n      <div class=\"hero-text\">\n        <small>WORKER 01 &middot; CURRENT STATUS</small>\n        <h1>{{stTitle()}}</h1>\n        <p>{{stSub()}}</p>\n      </div>\n      <div class=\"hero-worn\" ng-class=\"{on: d.worn == 1}\"><span class=\"dot\"></span>{{d.worn == 1 ? 'Helmet worn' : 'Helmet not worn'}}</div>\n    </section>\n\n    <section class=\"grid4\">\n      <article class=\"card kpi\" ng-repeat=\"c in cards\" ng-class=\"'lvl-' + lvl(c.k)\">\n        <div class=\"kpi-head\"><span>{{c.title}}</span><em class=\"chip\">{{lvlText(c.k)}}</em></div>\n        <div class=\"ring-wrap\">\n          <svg viewBox=\"0 0 120 120\" class=\"ring\">\n            <circle class=\"ring-bg\" cx=\"60\" cy=\"60\" r=\"52\"></circle>\n            <circle class=\"ring-fg\" cx=\"60\" cy=\"60\" r=\"52\" transform=\"rotate(-90 60 60)\" ng-attr-stroke-dasharray=\"{{C}}\" ng-attr-stroke-dashoffset=\"{{off(c.k)}}\"></circle>\n          </svg>\n          <div class=\"ring-val\"><b>{{d.worn == 1 ? (v[c.k] | number:c.dec) : '--'}}</b><span>{{c.unit}}</span></div>\n        </div>\n        <div class=\"kpi-foot\">{{c.limit}}</div>\n      </article>\n    </section>\n\n    <article class=\"card\">\n      <div class=\"card-head\"><h2>Live trend</h2><div class=\"legend\"><span class=\"lg t\"></span>Temperature<span class=\"lg n\"></span>Noise</div></div>\n      <svg class=\"spark\" viewBox=\"0 0 600 140\" preserveAspectRatio=\"none\">\n        <line class=\"grid\" x1=\"0\" x2=\"600\" y1=\"6\" y2=\"6\"></line>\n        <line class=\"grid\" x1=\"0\" x2=\"600\" y1=\"70\" y2=\"70\"></line>\n        <line class=\"grid\" x1=\"0\" x2=\"600\" y1=\"134\" y2=\"134\"></line>\n        <line class=\"limit\" x1=\"0\" x2=\"600\" y1=\"62\" y2=\"62\"></line>\n        <polyline class=\"line-n\" ng-attr-points=\"{{sp.n}}\"></polyline>\n        <polyline class=\"line-t\" ng-attr-points=\"{{sp.t}}\"></polyline>\n      </svg>\n    </article>\n  </div>\n\n  <div class=\"right\">\n    <article class=\"card map\">\n      <div class=\"card-head\"><h2>Worker location</h2><a href=\"/worldmap/\" target=\"_blank\">Full map &nearr;</a></div>\n      <div class=\"loc-line\">\n        <span>LAT <b>{{loc.lat !== null ? (loc.lat | number:5) : '--'}}</b></span>\n        <span>LON <b>{{loc.lon !== null ? (loc.lon | number:5) : '--'}}</b></span>\n        <span>SOURCE <b>{{loc.src}}</b></span>\n        <span>UPDATED <b>{{loc.age}}</b></span>\n        <a ng-if=\"loc.lat !== null\" ng-href=\"https://www.google.com/maps?q={{loc.lat}},{{loc.lon}}\" target=\"_blank\">Google Maps &nearr;</a>\n      </div>\n      <iframe src=\"/worldmap/\" title=\"Worker map\" loading=\"lazy\"></iframe>\n    </article>\n\n    <article class=\"card\">\n      <div class=\"card-head\"><h2>Alerts</h2><span class=\"count\">{{alerts.length}}</span></div>\n      <div class=\"alerts\">\n        <div class=\"empty\" ng-if=\"!alerts.length\">No alerts yet</div>\n        <div class=\"alert-row\" ng-repeat=\"a in alerts track by a.id\" ng-class=\"'al-' + a.type\">\n          <div class=\"al-ic\" ng-switch=\"a.type\">\n            <svg ng-switch-when=\"fire\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M12 3c.8 3 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2 0 2 1 3 2 3 0-3-1-5 1-8.8z\"/></svg>\n            <svg ng-switch-when=\"fall\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M12 3l10 18H2z\"/><path d=\"M12 10v5M12 18v.4\"/></svg>\n            <svg ng-switch-when=\"gas\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M7 18a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6-1A4.5 4.5 0 0 1 17 18z\"/></svg>\n            <svg ng-switch-when=\"noise\" class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M4 9v6h4l5 4V5L8 9z\"/><path d=\"M16.5 9a4 4 0 0 1 0 6M19.5 6a8 8 0 0 1 0 12\"/></svg>\n            <svg ng-switch-default class=\"ico\" viewBox=\"0 0 24 24\"><path d=\"M4 12.5l5 5L20 6.5\"/></svg>\n          </div>\n          <div class=\"al-main\"><b>{{alTitle(a.type)}}</b><span>{{a.detail}}</span></div>\n          <time>{{a.time}}</time>\n        </div>\n      </div>\n    </article>\n  </div>\n</div>\n\n<script>\n(function (scope) {\n  var C = 2 * Math.PI * 52, MAX = 40, root = null;\n  scope.C = C.toFixed(2);\n  scope.cards = [\n    { k: 'temp',   title: 'Temperature',  unit: '\\u00b0C', dec: 1, limit: 'Alarm above 45 \\u00b0C' },\n    { k: 'gas',    title: 'Gas level',    unit: '%',       dec: 0, limit: 'Alarm above 25 %' },\n    { k: 'accel',  title: 'Acceleration', unit: 'g',       dec: 2, limit: 'Fall above 2.5 g' },\n    { k: 'noise',  title: 'Noise level',  unit: '%',       dec: 0, limit: 'Alarm above 80 %' }\n  ];\n  var LIM = { temp: { bad: 45, warn: 40, dir: 1 }, gas: { bad: 25, warn: 15, dir: 1 },\n              accel: { bad: 2.5, warn: 1.5, dir: 1 }, noise: { bad: 80, warn: 60, dir: 1 } };\n  var RNG = { temp: [0, 80], gas: [0, 100], accel: [0, 5], noise: [0, 100] };\n  var ST = {\n    'SAFE':     { cls: 'ok',   title: 'All clear',             sub: 'All parameters are within safe limits' },\n    'FIRE':     { cls: 'bad',  title: 'Fire risk detected',    sub: 'Temperature is above the safe limit' },\n    'FALL':     { cls: 'bad',  title: 'Fall detected',         sub: 'Sudden impact detected, waiting for worker response' },\n    'GAS':      { cls: 'bad',  title: 'Gas leak detected',     sub: 'Gas level is above the safe limit' },\n    'NOISE':    { cls: 'warn', title: 'High noise exposure',   sub: 'Loud noise for a long period, use ear protection' },\n    'NOT WORN': { cls: 'idle', title: 'Helmet not worn',       sub: 'Monitoring is paused until the helmet is worn' }\n  };\n  var AL = { fire: 'Fire predicted', fall: 'Fall predicted', gas: 'Gas leakage', noise: 'High noise', info: 'Helmet worn, system started' };\n\n  scope.d = { temp: null, gas: null, accel: null, noise: null, worn: 0, status: null };\n  scope.v = { temp: 0, gas: 0, accel: 0, noise: 0 };\n  scope.online = false; scope.clock = ''; scope.alerts = [];\n  scope.loc = { lat: null, lon: null, src: 'Waiting', acc: null, ts: 0, age: '--' };\n  scope.sp = { t: '', n: '' };\n  var hist = [], lastSeen = 0, seq = 0;\n\n  // move the console to <body> so it covers the whole screen (no dashboard header / scrolling)\n  function mount(n) {\n    root = document.getElementById('sh-root');\n    // wait until Angular has compiled the bindings (no raw {{ }} left), then go full screen\n    var ready = root && (root.textContent || '').indexOf('{{') === -1;\n    if (ready) { if (root.parentNode !== document.body) document.body.appendChild(root); }\n    else if (n < 60) setTimeout(function () { mount(n + 1); }, 100);\n  }\n  mount(0);\n\n  function clamp(x) { return Math.max(0, Math.min(1, x)); }\n  function two(n) { return (n < 10 ? '0' : '') + n; }\n  function hms(d) { return two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds()); }\n\n  scope.lvl = function (k) {\n    var x = scope.d[k];\n    if (scope.d.worn !== 1 || typeof x !== 'number') return 'idle';\n    var L = LIM[k];\n    if (L.dir === 1) return x > L.bad ? 'bad' : (x > L.warn ? 'warn' : 'ok');\n    return x < L.bad ? 'bad' : (x < L.warn ? 'warn' : 'ok');\n  };\n  scope.lvlText = function (k) { return { ok: 'NORMAL', warn: 'WATCH', bad: 'ALARM', idle: 'STANDBY' }[scope.lvl(k)]; };\n  scope.off = function (k) {\n    var x = scope.d[k], r = RNG[k];\n    if (typeof x !== 'number' || scope.d.worn !== 1) return C.toFixed(1);\n    return (C * (1 - clamp((x - r[0]) / (r[1] - r[0])))).toFixed(1);\n  };\n  function st() { return ST[scope.d.status] || { cls: 'idle', title: 'Waiting for data', sub: 'No telemetry received yet' }; }\n  scope.stClass = function () { return st().cls; };\n  scope.stTitle = function () { return st().title; };\n  scope.stSub = function () { return st().sub; };\n  scope.alTitle = function (t) { return AL[t] || AL.info; };\n\n  function tween(key, to) {\n    var from = scope.v[key] || 0, t0 = performance.now(), dur = 700;\n    function step(t) {\n      var k = Math.min(1, (t - t0) / dur); k = 1 - Math.pow(1 - k, 3);\n      scope.v[key] = from + (to - from) * k;\n      scope.$applyAsync();\n      if (k < 1) requestAnimationFrame(step);\n    }\n    requestAnimationFrame(step);\n  }\n\n  function line(key, max) {\n    var step = 600 / (MAX - 1), n = hist.length, pts = [];\n    for (var i = 0; i < n; i++) {\n      var val = hist[i][key];\n      if (typeof val !== 'number') continue;\n      pts.push((600 - (n - 1 - i) * step).toFixed(1) + ',' + (134 - clamp(val / max) * 128).toFixed(1));\n    }\n    return pts.join(' ');\n  }\n  function buildSpark() { scope.sp = { t: line('t', 80), n: line('n', 100) }; }\n\n  function setLoc(lat, lon, src, acc) {\n    scope.loc.lat = lat; scope.loc.lon = lon; scope.loc.src = src;\n    scope.loc.acc = (typeof acc === 'number') ? Math.round(acc) : null;\n    scope.loc.ts = Date.now();\n  }\n\n  function onTele(p) {\n    lastSeen = Date.now();\n    scope.d.worn = (p.worn === 1) ? 1 : 0;\n    scope.d.status = p.status || (scope.d.worn ? 'SAFE' : 'NOT WORN');\n    // Wokwi version sends 'oxygen' (%): convert it to the same gas scale\n    if (typeof p.gas !== 'number' && typeof p.oxygen === 'number') p.gas = Math.max(0, (98 - p.oxygen) / 40 * 100);\n    if (scope.d.worn === 1) {\n      ['temp', 'gas', 'accel', 'noise'].forEach(function (k) {\n        if (typeof p[k] === 'number') { scope.d[k] = p[k]; tween(k, p[k]); }\n      });\n      hist.push({ t: p.temp, n: p.noise });\n      if (hist.length > MAX) hist.shift();\n      buildSpark();\n    }\n    if (typeof p.lat === 'number' && typeof p.lon === 'number') {\n      setLoc(p.lat, p.lon, p.src === 'owntracks' ? 'OwnTracks' : 'Helmet GPS', scope.loc.acc);\n    }\n    scope.online = true;\n  }\n\n  function onAlert(p) {\n    var d = [];\n    if (p.temp !== undefined) d.push(p.temp + ' \\u00b0C');\n    if (p.gas !== undefined) d.push('Gas ' + p.gas + ' %');\n    else if (p.oxygen !== undefined) d.push('O2 ' + p.oxygen + ' %');\n    if (p.noise !== undefined) d.push('Noise ' + p.noise + ' %');\n    if (p.accel !== undefined) d.push(p.accel + ' g');\n    if (typeof p.lat === 'number') d.push(p.lat.toFixed(4) + ', ' + p.lon.toFixed(4));\n    scope.alerts.unshift({ id: ++seq, type: p.type || 'info', detail: d.join('  \\u00b7  ') || (p.message || ''), time: hms(new Date()) });\n    if (scope.alerts.length > 6) scope.alerts.pop();\n  }\n\n  function ageStr() {\n    if (!scope.loc.ts) return '--';\n    var s = Math.round((Date.now() - scope.loc.ts) / 1000);\n    return s < 60 ? s + ' s ago' : Math.round(s / 60) + ' min ago';\n  }\n\n  scope.$watch('msg', function (msg) {\n    if (!msg || !msg.payload || typeof msg.payload !== 'object') return;\n    var p = msg.payload;\n    if (p.kind === 'telemetry') onTele(p);\n    else if (p.kind === 'alert') onAlert(p);\n    else if (p.kind === 'location') setLoc(p.lat, p.lon, 'OwnTracks', p.acc);\n  });\n\n  var timer = setInterval(function () {\n    var now = new Date();\n    scope.clock = now.toLocaleString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });\n    scope.online = lastSeen > 0 && (Date.now() - lastSeen) < 8000;\n    scope.loc.age = ageStr();\n    scope.$applyAsync();\n  }, 1000);\n  scope.$on('$destroy', function () {\n    clearInterval(timer);\n    if (root && root.parentNode) root.parentNode.removeChild(root);\n  });\n})(scope);\n</script>\n",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 780,
+        "y": 150,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d533cf4f62a36a48",
+        "type": "ui_template",
+        "z": "4a7dbdfdd986f27f",
+        "group": "hlm_grp",
+        "name": "Dark theme (global CSS)",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "format": "<style>\nhtml, body { overflow:hidden !important; background:#060708 !important; }\nmd-content, md-content.md-default-theme, .nr-dashboard-theme { background:#060708 !important; }\nmd-toolbar, md-toolbar.md-default-theme, md-toolbar.md-hue-1 { background:#0b0c0e !important; color:#e6e9ee !important; box-shadow:none !important; }\n.nr-dashboard-cardpanel { background:transparent !important; border:none !important; box-shadow:none !important; padding:0 !important; }\n.nr-dashboard-cardtitle { display:none !important; }\n</style>\n",
+        "storeOutMessages": false,
+        "fwdInMessages": false,
+        "resendOnRefresh": false,
+        "templateScope": "global",
+        "className": "",
+        "x": 790,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "86a1f332d49a74d7",
+        "type": "worldmap",
+        "z": "4a7dbdfdd986f27f",
+        "name": "Worker map",
+        "lat": "",
+        "lon": "",
+        "zoom": "",
+        "layer": "OSMG",
+        "cluster": "",
+        "maxage": "",
+        "usermenu": "show",
+        "layers": "show",
+        "panit": "true",
+        "panlock": "false",
+        "zoomlock": "false",
+        "hiderightclick": "false",
+        "coords": "none",
+        "showgrid": "false",
+        "allowFileDrop": "false",
+        "path": "/worldmap",
+        "overlist": "DR,CO,RA,DN,HM",
+        "maplist": "OSMG,OSMC,EsriC,EsriS,EsriT,EsriDG,UKOS",
+        "mapname": "",
+        "mapurl": "",
+        "mapopt": "",
+        "mapwms": false,
+        "x": 760,
+        "y": 330,
+        "wires": []
+    },
+    {
+        "id": "d61da78461dc6615",
+        "type": "comment",
+        "z": "4a7dbdfdd986f27f",
+        "name": "OwnTracks setup (read me)",
+        "info": "OwnTracks app -> Preferences -> Connection:\n- Mode: MQTT\n- Host: your HiveMQ Cloud host, Port 8883, TLS ON\n- Username/Password: a HiveMQ credential allowed to publish\n- Device ID / Tracker ID: any name\nThe app publishes to owntracks/<user>/<device>, which this flow subscribes to (owntracks/+/+).\nMap page: http://<node-red-ip>:1880/worldmap/   Dashboard: http://<node-red-ip>:1880/ui",
+        "x": 190,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "hlm_broker",
+        "type": "mqtt-broker",
+        "name": "HiveMQ Cloud",
+        "broker": "0bd3157b06504b2fabb013f26081d4e6.s1.eu.hivemq.cloud",
+        "port": "8883",
+        "tls": "hlm_tls",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": true,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "hlm_grp",
+        "type": "ui_group",
+        "name": "Console",
+        "tab": "hlm_ui_tab",
+        "order": 1,
+        "disp": false,
+        "width": "12",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "hlm_tls",
+        "type": "tls-config",
+        "name": "HiveMQ TLS",
+        "cert": "",
+        "key": "",
+        "ca": "",
+        "certname": "",
+        "keyname": "",
+        "caname": "",
+        "servername": "",
+        "verifyservercert": true,
+        "alpnprotocol": ""
+    },
+    {
+        "id": "hlm_ui_tab",
+        "type": "ui_tab",
+        "name": "Smart Helmet",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "4a41804cef2b0362",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-node-email": "5.2.5",
+            "node-red-dashboard": "3.6.6",
+            "node-red-contrib-web-worldmap": "5.8.1"
+        }
+    }
+]

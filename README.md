@@ -300,13 +300,3 @@ python3 raspberry_pi/helmet.py
 - A smarter fall detector (impact followed by no movement).
 - Helmet casing, battery power and a final design.
 
-## Team
-
-| Name | Role |
-|---|---|
-| [Name] | [Role] |
-| [Name] | [Role] |
-
-## License
-
-[Choose a license, for example MIT, and add a LICENSE file.]

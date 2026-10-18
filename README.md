@@ -1,4 +1,4 @@
-# Smart Helmet - Oil Site Worker Safety (IoT)
+# - Smart Helmet - Oil Site Worker Safety (IoT)
 
 A smart safety helmet for workers on oil sites. Sensors inside the helmet watch for **fire risk, gas leaks, falls and loud noise**, warn the worker on the spot with a buzzer and an LCD, and alert management by email with the worker's location. All readings are stored and shown on live dashboards.
 
